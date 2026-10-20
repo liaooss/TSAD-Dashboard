@@ -1,0 +1,5 @@
+# Additional dependencies for the Streamlit dashboard.
+# The root requirements.txt includes the original PyOD runtime dependencies.
+streamlit>=1.40
+pandas>=2.0
+plotly>=5.20

@@ -4,3 +4,7 @@ numpy>=1.19
 numba>=0.51
 scipy>=1.5.1
 scikit-learn>=0.22.0
+# TSAD Dashboard web application
+streamlit>=1.40
+pandas>=2.0
+plotly>=5.20
