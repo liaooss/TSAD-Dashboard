@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import time
 from io import BytesIO
 
@@ -11,7 +10,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from pyod.models.iforest import IForest
 from pyod.models.lof import LOF
 from pyod.models.knn import KNN
@@ -366,6 +365,128 @@ st.markdown(
         color: #1d4ed8;
     }
 
+    /* Corporate Clean refinement: calmer hierarchy and consistent surfaces */
+    .cc-section-label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0.25rem 0 0.25rem 12px;
+        border-left: 3px solid #2563eb;
+        margin: 1.8rem 0 1rem;
+        line-height: 1.45;
+    }
+
+    .cc-hero {
+        border-radius: 14px;
+        padding: clamp(20px, 3vw, 32px);
+        margin-bottom: 1.6rem;
+        transition: box-shadow 160ms ease;
+    }
+
+    .cc-hero:hover {
+        transform: none;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
+    }
+
+    [data-testid="stMetric"] {
+        min-height: 112px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        border-radius: 14px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+    }
+
+    [data-testid="stMetric"]:hover {
+        transform: none;
+        box-shadow: 0 2px 7px rgba(15, 23, 42, 0.06);
+    }
+
+    [data-testid="stPlotlyChart"],
+    [data-testid="stDataFrame"],
+    [data-testid="stTable"] {
+        border-radius: 12px;
+    }
+
+    [data-testid="stExpander"] {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #ffffff;
+    }
+
+    [data-testid="stProgressBar"] > div > div {
+        background-color: #2563eb;
+    }
+
+    /* Sidebar navigation: compact, clear, and accessible. */
+    .cc-sidebar-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 10px 0 16px;
+    }
+
+    .cc-sidebar-nav .cc-nav-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        min-height: 44px;
+        padding: 11px 12px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        background: transparent;
+        color: #334155 !important;
+        font-size: 14px;
+        font-weight: 620;
+        line-height: 1.35;
+        text-decoration: none !important;
+        transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+        cursor: pointer;
+    }
+
+    .cc-sidebar-nav .cc-nav-link:hover {
+        border-color: #dbeafe;
+        background: #eff6ff;
+        color: #1d4ed8 !important;
+    }
+
+    .cc-sidebar-nav .cc-nav-link:focus-visible {
+        outline: 3px solid rgba(37, 99, 235, 0.28);
+        outline-offset: 2px;
+    }
+
+    .cc-sidebar-nav .cc-nav-arrow {
+        color: #94a3b8;
+        font-size: 13px;
+        flex: 0 0 auto;
+    }
+
+    .cc-sidebar-nav .cc-nav-link:hover .cc-nav-arrow {
+        color: #2563eb;
+    }
+
+    /* Leave room for the sticky Streamlit header when jumping to a section. */
+    .cc-section-label {
+        scroll-margin-top: 5rem;
+    }
+
+    /* Keep interactive controls comfortable on touch screens. */
+    button, input, textarea, [data-baseweb="select"] {
+        scroll-margin-top: 1rem;
+    }
+
+    @media (max-width: 1024px) {
+        .block-container {
+            padding-left: 1.25rem;
+            padding-right: 1.25rem;
+        }
+        .cc-hero-title {
+            font-size: 27px;
+        }
+    }
+
     @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after {
             animation-duration: 0.01ms !important;
@@ -453,13 +574,11 @@ def make_windows(values: np.ndarray, window_size: int) -> np.ndarray:
 
 def make_result_key(file_bytes: bytes, time_column: str | None, metric_columns: list[str],
                     algorithm: str, contamination: float, window_size: int,
-                    duplicate_strategy: str, invalid_time_strategy: str,
-                    normalization: str = "Z-Score", resample_rule: str = "不重采样",
-                    remove_negative: bool = False, window_step: int = 1) -> str:
+                    duplicate_strategy: str, invalid_time_strategy: str) -> str:
     digest = hashlib.sha256()
     digest.update(file_bytes)
     digest.update(repr((time_column, tuple(metric_columns), algorithm, float(contamination),
-                        int(window_size), duplicate_strategy, invalid_time_strategy, normalization, resample_rule, remove_negative, int(window_step))).encode("utf-8"))
+                        int(window_size), duplicate_strategy, invalid_time_strategy)).encode("utf-8"))
     return digest.hexdigest()
 
 
@@ -536,9 +655,8 @@ def _labels_from_scores(scores: np.ndarray, contamination: float) -> tuple[np.nd
     return labels, threshold
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
 def run_detection(dataframe: pd.DataFrame, metric_columns: list[str], algorithm: str,
-                  contamination: float, window_size: int, normalization: str = "Z-Score", window_step: int = 1) -> tuple[pd.DataFrame, float, float]:
+                  contamination: float, window_size: int) -> tuple[pd.DataFrame, float, float]:
     """Preprocess selected metrics and run a detector; return results, elapsed time, threshold."""
     if len(dataframe) < 5:
         raise ValueError("可用于检测的数据至少需要 5 行，请检查时间戳去重或无效时间戳删除设置。")
@@ -546,8 +664,7 @@ def run_detection(dataframe: pd.DataFrame, metric_columns: list[str], algorithm:
     numeric = dataframe[metric_columns].apply(pd.to_numeric, errors="coerce")
     medians = numeric.median(axis=0).fillna(0.0)
     imputed = numeric.fillna(medians).replace([np.inf, -np.inf], np.nan).fillna(0.0).to_numpy(dtype=float)
-    scaler = MinMaxScaler() if normalization == "Min-Max" else StandardScaler()
-    scaled = scaler.fit_transform(imputed)
+    scaled = StandardScaler().fit_transform(imputed)
 
     if algorithm == ALGORITHM_SR:
         scores = _spectral_residual_scores(scaled)
@@ -563,24 +680,12 @@ def run_detection(dataframe: pd.DataFrame, metric_columns: list[str], algorithm:
             model = LOF(contamination=contamination, n_neighbors=max(2, min(20, len(features) - 1)))
         else:
             model = KNN(contamination=contamination, n_neighbors=max(1, min(5, len(features) - 1)), method="largest")
-        step = max(1, int(window_step))
-        train_features = features[::step]
-        model.fit(train_features)
-        try:
-            scores = np.asarray(model.decision_function(features), dtype=float)
-        except Exception:
-            # Fallback for detectors without out-of-sample scoring: interpolate training scores.
-            sampled_scores = np.asarray(model.decision_scores_, dtype=float)
-            scores = np.interp(np.arange(len(features)), np.arange(0, len(features), step)[:len(sampled_scores)], sampled_scores)
-
-    # Normalize all algorithm scores to [0, 1] so the dashboard threshold is comparable.
-    raw_scores = np.nan_to_num(np.asarray(scores, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
-    score_min, score_max = float(np.min(raw_scores)), float(np.max(raw_scores))
-    scores = (raw_scores - score_min) / (score_max - score_min) if score_max > score_min else np.zeros_like(raw_scores)
-    labels, threshold = _labels_from_scores(scores, contamination)
+        model.fit(features)
+        scores = np.asarray(model.decision_scores_, dtype=float)
+        labels = np.asarray(model.labels_, dtype=int) == 1
+        threshold = float(getattr(model, "threshold_", np.quantile(scores, 1.0 - contamination)))
 
     results = dataframe.copy()
-    results["raw_anomaly_score"] = raw_scores
     results["anomaly_score"] = np.asarray(scores, dtype=float)
     results["is_anomaly"] = np.asarray(labels, dtype=bool)
     results["anomaly_label"] = np.where(results["is_anomaly"], "异常", "正常")
@@ -616,39 +721,6 @@ def build_time_series_chart(results: pd.DataFrame, time_column: str | None,
     return fig
 
 
-def build_multi_metric_chart(results: pd.DataFrame, time_column: str | None, metric_columns: list[str], mode: str) -> go.Figure:
-    if time_column:
-        x_values = pd.to_datetime(results[time_column], errors="coerce")
-        if x_values.isna().all():
-            x_values = results[time_column]
-    else:
-        x_values = np.arange(len(results))
-    mask = results["is_anomaly"].to_numpy(dtype=bool)
-    if mode == "合并曲线":
-        fig = go.Figure()
-        for metric in metric_columns:
-            fig.add_trace(go.Scatter(x=x_values, y=pd.to_numeric(results[metric], errors="coerce"),
-                mode="lines", name=metric, connectgaps=False))
-        if mask.any():
-            for metric in metric_columns:
-                metric_y = pd.to_numeric(results[metric], errors="coerce").to_numpy()
-                fig.add_trace(go.Scatter(x=np.asarray(x_values)[mask], y=metric_y[mask],
-                    customdata=results["anomaly_score"].to_numpy()[mask], mode="markers", name=f"{metric} 异常",
-                    marker=dict(color="#dc2626", size=8, line=dict(color="#ffffff", width=1)),
-                    hovertemplate="时间：%{x}<br>指标值：%{y}<br>异常分数：%{customdata:.3f}<extra></extra>"))
-        fig.update_layout(title="多指标时序总览", template="plotly_white", hovermode="x unified")
-    else:
-        fig = make_subplots(rows=len(metric_columns), cols=1, shared_xaxes=True, vertical_spacing=min(0.06, 0.25 / max(1, len(metric_columns))), subplot_titles=metric_columns)
-        for row, metric in enumerate(metric_columns, start=1):
-            y = pd.to_numeric(results[metric], errors="coerce")
-            fig.add_trace(go.Scatter(x=x_values, y=y, mode="lines", name=metric, line=dict(color="#2563eb", width=1.7), connectgaps=False), row=row, col=1)
-            if mask.any():
-                fig.add_trace(go.Scatter(x=np.asarray(x_values)[mask], y=y.to_numpy()[mask], customdata=results["anomaly_score"].to_numpy()[mask], mode="markers", name=f"{metric} 异常", marker=dict(color="#dc2626", size=7), showlegend=(row == 1), hovertemplate="时间：%{x}<br>指标值：%{y}<br>异常分数：%{customdata:.3f}<extra></extra>"), row=row, col=1)
-        fig.update_layout(title="多指标时序子图", template="plotly_white", height=max(360, 230 * len(metric_columns)), hovermode="x unified")
-    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#ffffff", font=dict(family="Segoe UI, Microsoft YaHei, sans-serif", color="#374151", size=12), margin=dict(l=20, r=20, t=60, b=25))
-    return fig
-
-
 def build_score_chart(results: pd.DataFrame, time_column: str | None, threshold: float) -> go.Figure:
     if time_column:
         x_values = results[time_column]
@@ -681,21 +753,35 @@ def build_metric_distribution(results: pd.DataFrame, metric_columns: list[str]) 
         valid = values.notna()
         counts.append({"指标": column, "异常点数": int((results["is_anomaly"] & valid).sum()),
                        "有效样本数": int(valid.sum())})
-    dist = pd.DataFrame(counts)
+    dist = pd.DataFrame(counts).sort_values("异常点数", ascending=True).reset_index(drop=True)
+    # Keep equal values in the same color; highlight every item tied for the maximum.
+    labels = [f"{i + 1}.  {name}" for i, name in enumerate(dist["指标"].tolist())]
+    max_count = dist["异常点数"].max() if not dist.empty else 0
+    colors = ["#3977DB" if count == max_count else "#8AADE5" for count in dist["异常点数"]]
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=dist["指标"], y=dist["异常点数"], name="异常点数", marker_color="#2563eb"))
-    fig.update_layout(template="plotly_white", paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
+    fig.add_trace(go.Bar(
+        x=dist["异常点数"], y=labels, orientation="h", name="异常点数",
+        marker=dict(color=colors, cornerradius="50%"), text=dist["异常点数"], textposition="outside",
+        cliponaxis=False, marker_line_width=0, width=0.30,
+        hovertemplate="%{y}<br>异常时间点数量：%{x:,}<extra></extra>",
+    ))
+    fig.update_layout(
+        template="plotly_white", paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
         title="各指标对应的异常时间点数量（同一时间点异常会计入各指标）",
-        yaxis_title="异常点数", margin=dict(l=18, r=18, t=55, b=18), font=dict(color="#374151", size=12))
-    fig.update_xaxes(showgrid=False, linecolor="#e5e7eb")
-    fig.update_yaxes(showgrid=True, gridcolor="#f1f5f9", linecolor="#e5e7eb", rangemode="tozero")
+        xaxis_title="异常时间点数量", yaxis_title="", bargap=0.52, height=320,
+        margin=dict(l=18, r=48, t=55, b=24),
+        font=dict(family="Segoe UI, Microsoft YaHei, sans-serif", color="#374151", size=12),
+        showlegend=False,
+    )
+    max_count = max(dist["异常点数"].max(), 1)
+    fig.update_xaxes(showgrid=True, gridcolor="#f1f5f9", linecolor="#e5e7eb", range=[-max_count * 0.08, max_count * 1.18], zeroline=False)
+    fig.update_yaxes(showgrid=False, linecolor="#ffffff", automargin=True, ticksuffix="  ")
     return fig
 
 
 def anomaly_intervals(results: pd.DataFrame, time_column: str | None) -> pd.DataFrame:
     mask = results["is_anomaly"].to_numpy(dtype=bool)
-    metric_columns = [c for c in results.columns if c not in {time_column, "raw_anomaly_score", "anomaly_score", "is_anomaly", "anomaly_label", "label", "true_label"} and pd.api.types.is_numeric_dtype(results[c])]
-    if not mask.any(): return pd.DataFrame(columns=["开始时间/样本", "结束时间/样本", "持续样本数", "涉及指标", "持续时长"])
+    if not mask.any(): return pd.DataFrame(columns=["开始时间/样本", "结束时间/样本", "持续样本数"])
     groups = []
     start = None
     for idx, is_anomaly in enumerate(mask):
@@ -708,19 +794,7 @@ def anomaly_intervals(results: pd.DataFrame, time_column: str | None) -> pd.Data
                 end_label = str(results.iloc[end][time_column])
             else:
                 start_label, end_label = f"样本 {start + 1}", f"样本 {end + 1}"
-            segment = results.iloc[start:end + 1]
-            involved = []
-            for metric in metric_columns:
-                if segment[metric].notna().any() and segment[metric].nunique(dropna=True) > 1:
-                    involved.append(metric)
-            duration = "—"
-            if time_column:
-                try:
-                    delta = pd.to_datetime(results.iloc[end][time_column]) - pd.to_datetime(results.iloc[start][time_column])
-                    duration = str(delta)
-                except Exception:
-                    pass
-            groups.append({"开始时间/样本": start_label, "结束时间/样本": end_label, "持续样本数": end - start + 1, "涉及指标": "、".join(involved) if involved else "所选指标", "持续时长": duration})
+            groups.append({"开始时间/样本": start_label, "结束时间/样本": end_label, "持续样本数": end - start + 1})
             start = None
     return pd.DataFrame(groups)
 
@@ -731,18 +805,23 @@ def anomaly_intervals(results: pd.DataFrame, time_column: str | None) -> pd.Data
 with st.sidebar:
     st.markdown("## TSAD Dashboard")
     st.caption("时间序列异常检测")
+    st.markdown("**功能导航**")
+    st.markdown("""
+    <nav class="cc-sidebar-nav" aria-label="页面功能导航">
+      <a class="cc-nav-link" href="#data-import" title="跳转到 CSV 数据导入区域">CSV 数据分析 <span class="cc-nav-arrow" aria-hidden="true">↗</span></a>
+      <a class="cc-nav-link" href="#algorithm-detection" title="跳转到算法选择与检测区域">多算法检测 <span class="cc-nav-arrow" aria-hidden="true">↗</span></a>
+      <a class="cc-nav-link" href="#interactive-visualization" title="跳转到时序图表区域">交互式可视化 <span class="cc-nav-arrow" aria-hidden="true">↗</span></a>
+      <a class="cc-nav-link" href="#result-export" title="跳转到结果表格与下载区域">结果可导出 <span class="cc-nav-arrow" aria-hidden="true">↗</span></a>
+    </nav>
+    """, unsafe_allow_html=True)
     st.divider()
     st.markdown("### 检测配置")
     algorithm = st.selectbox("检测算法", ALL_ALGORITHMS,
         help="Isolation Forest、LOF、KNN 为 PyOD 通用检测器；Spectral Residual 与 Matrix Profile 为本项目实现的时序检测方法。")
     contamination = st.slider("预期异常比例", min_value=0.01, max_value=0.20, value=0.05, step=0.01,
         format="%.2f", help="用于设置预期异常点比例，不等同于业务真实故障率。")
-    window_size = st.slider("时间窗口大小", min_value=2, max_value=60, value=5, step=1,
-        help="用于构造 Isolation Forest/LOF/KNN 的因果窗口特征；Matrix Profile 使用该值作为子序列长度。")
-    window_step = st.slider("窗口步长", min_value=1, max_value=10, value=1, step=1,
-        help="PyOD 模型按该步长抽取窗口训练样本，最终仍会对每个时间点评分。1 表示不跳步。")
-    normalization = st.selectbox("指标归一化", ["Z-Score", "Min-Max"], index=0,
-        help="对每个指标分别归一化，降低 CPU、内存、磁盘 I/O 等量纲差异对模型的影响。")
+    window_size = st.slider("时间窗口大小", min_value=2, max_value=30, value=5, step=1,
+        help="用于构造滑动窗口特征；Matrix Profile 使用该值作为子序列长度。")
     st.divider()
     st.markdown("### 使用说明")
     st.markdown("1. 上传 CSV 数据文件。\n2. 选择时间列与数值指标。\n3. 配置算法并启动检测。\n4. 查看图表、异常区间并导出结果。")
@@ -764,7 +843,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="cc-section-label">01 数据导入与质量检查</div>', unsafe_allow_html=True)
+st.markdown('<div id="data-import" class="cc-section-label">01 数据导入与质量检查</div>', unsafe_allow_html=True)
 upload_col, sample_col = st.columns([3, 1], gap="large")
 with upload_col:
     uploaded_file = st.file_uploader("上传 CSV 文件", type=["csv"], help="每行建议代表一个时间点，每列代表时间戳或数值指标。", key="tsad_csv_uploader")
@@ -773,44 +852,20 @@ with sample_col:
     st.download_button("下载示例 CSV", data=make_sample_csv(), file_name="tsad_sample_data.csv", mime="text/csv", use_container_width=True)
     st.caption("包含时间戳、CPU、内存、磁盘 I/O 和请求量。")
 
-with st.expander("可选：粘贴 JSON 指标数据", expanded=False):
-    json_text = st.text_area("JSON 数组或对象", placeholder='[{"timestamp":"2026-01-01 00:00:00","cpu_usage":35}]', height=100)
-    json_load = st.button("载入 JSON 数据", key="load_json_data")
-    if json_load and json_text.strip():
-        try:
-            parsed_json = json.loads(json_text)
-            if isinstance(parsed_json, dict):
-                parsed_json = [parsed_json]
-            if not isinstance(parsed_json, list) or not parsed_json or not all(isinstance(row, dict) for row in parsed_json):
-                raise ValueError("请输入 JSON 对象或对象数组。")
-            json_df = pd.json_normalize(parsed_json)
-            st.session_state["tsad_json_csv"] = json_df.to_csv(index=False).encode("utf-8-sig")
-            st.success("JSON 已转换为表格数据。请在下方使用上传的 CSV 或重新载入 JSON。")
-        except Exception as exc:
-            st.error(f"JSON 解析失败：{exc}")
-
-if uploaded_file is None and not st.session_state.get("tsad_json_csv"):
+if uploaded_file is None:
     st.info("请上传 CSV 文件，或下载示例数据体验平台功能。")
     st.markdown("""<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;box-shadow:0 1px 2px rgba(15,23,42,.05)"><div style="font-size:16px;font-weight:650;color:#111827;margin-bottom:8px">分析流程</div><div style="color:#6b7280;line-height:1.9">数据上传 → 数据质量检查 → 指标选择 → 异常检测 → 可视化分析 → 结果导出</div></div>""", unsafe_allow_html=True)
     st.stop()
 
-if uploaded_file is not None:
-    file_bytes = uploaded_file.getvalue()
-    try:
-        try:
-            dataframe = pd.read_csv(BytesIO(file_bytes), encoding="utf-8-sig")
-        except UnicodeDecodeError:
-            dataframe = pd.read_csv(BytesIO(file_bytes), encoding="gb18030")
-    except Exception as exc:
-        st.error(f"CSV 文件读取失败，请检查编码、分隔符和文件格式。详情：{exc}")
-        st.stop()
-else:
-    file_bytes = st.session_state["tsad_json_csv"]
+file_bytes = uploaded_file.getvalue()
+try:
     try:
         dataframe = pd.read_csv(BytesIO(file_bytes), encoding="utf-8-sig")
-    except Exception as exc:
-        st.error(f"JSON 转换结果读取失败：{exc}")
-        st.stop()
+    except UnicodeDecodeError:
+        dataframe = pd.read_csv(BytesIO(file_bytes), encoding="gb18030")
+except Exception as exc:
+    st.error(f"CSV 文件读取失败，请检查编码、分隔符和文件格式。详情：{exc}")
+    st.stop()
 
 if dataframe.empty or len(dataframe.columns) == 0:
     st.error("CSV 文件为空或没有有效列，请检查文件内容。")
@@ -831,13 +886,6 @@ for col in dataframe.columns:
         converted = pd.to_numeric(dataframe[col], errors="coerce")
         if converted.notna().sum() >= max(3, int(len(dataframe) * 0.5)):
             numeric_columns.append(col)
-
-label_options = ["（无标注列）"] + dataframe.columns.tolist()
-label_column_option = st.selectbox("可选：真实异常标签列（用于 Precision / Recall / F1 评估）", label_options,
-    help="如果数据中包含人工标注列，请选择它；0/正常/normal 表示正常，1/异常/anomaly 表示异常。")
-label_column = None if label_column_option == label_options[0] else label_column_option
-if label_column in numeric_columns:
-    numeric_columns = [c for c in numeric_columns if c != label_column]
 
 st.markdown('<div class="cc-section-label">02 数据概览与预处理</div>', unsafe_allow_html=True)
 missings = int(dataframe.isna().sum().sum())
@@ -888,14 +936,6 @@ with config_col3:
     invalid_time_strategy = st.selectbox("无效时间戳处理", ["保留记录", "删除无效时间戳行"],
         help="当时间列无法解析时，可选择保留原始行或删除无效时间戳记录。")
 
-prep_col1, prep_col2 = st.columns([1, 1], gap="large")
-with prep_col1:
-    resample_rule = st.selectbox("时间重采样", ["不重采样", "1min", "5min", "10min", "30min", "1h"], index=0,
-        help="统一不规则采样间隔；每个时间桶内数值指标取均值，时间列必须有效。")
-with prep_col2:
-    remove_negative = st.checkbox("将负数监控值视为无效值", value=False,
-        help="适用于 CPU 使用率、内存占用率、计数等不应为负数的指标；若选中指标本身允许负值，请勿开启。")
-
 time_column = None if selected_time_option == time_options[0] else selected_time_option
 if not metric_columns:
     st.warning("请至少选择一个数值指标。")
@@ -930,25 +970,6 @@ else:
     if invalid_time_strategy != "保留记录":
         st.caption("未选择时间列，无效时间戳处理策略不会生效。")
 
-if remove_negative:
-    for metric in metric_columns:
-        analysis_dataframe.loc[pd.to_numeric(analysis_dataframe[metric], errors="coerce") < 0, metric] = np.nan
-
-if resample_rule != "不重采样":
-    if not time_column:
-        st.warning("重采样需要先选择时间列；当前暂不重采样。")
-    else:
-        valid_time_df = analysis_dataframe.loc[analysis_dataframe[time_column].notna()].copy()
-        if valid_time_df.empty:
-            st.warning("没有可用的有效时间戳，无法重采样。")
-        else:
-            other_columns = [c for c in valid_time_df.columns if c not in metric_columns and c != time_column]
-            aggregations = {c: "mean" for c in metric_columns}
-            aggregations.update({c: "first" for c in other_columns})
-            analysis_dataframe = (valid_time_df.set_index(time_column).sort_index()
-                .resample(resample_rule).agg(aggregations).reset_index())
-            st.info(f"已按 {resample_rule} 重采样，当前数据 {len(analysis_dataframe):,} 行。")
-
 if len(analysis_dataframe) < 5:
     st.warning("预处理后数据少于 5 行，检测结果可能不稳定。")
 if len(analysis_dataframe) != len(dataframe):
@@ -956,18 +977,18 @@ if len(analysis_dataframe) != len(dataframe):
 with st.expander("查看原始数据预览", expanded=False):
     st.dataframe(dataframe.head(10), use_container_width=True, hide_index=True)
 
-st.markdown('<div class="cc-section-label">03 异常检测与算法对比</div>', unsafe_allow_html=True)
-current_key = make_result_key(file_bytes, time_column, metric_columns, algorithm, contamination, window_size, duplicate_strategy, invalid_time_strategy, normalization, resample_rule, remove_negative, window_step)
+st.markdown('<div id="algorithm-detection" class="cc-section-label">03 异常检测与算法对比</div>', unsafe_allow_html=True)
+current_key = make_result_key(file_bytes, time_column, metric_columns, algorithm, contamination, window_size, duplicate_strategy, invalid_time_strategy)
 detect_col, config_summary_col = st.columns([1, 3], gap="large")
 with detect_col:
     run_clicked = st.button("开始异常检测", type="primary", use_container_width=True, key="run_detection_button")
 with config_summary_col:
-    st.caption(f"当前配置：{algorithm} · 异常比例 {contamination:.0%} · 窗口 {window_size} · 步长 {window_step} · 归一化 {normalization} · 指标数 {len(metric_columns)}")
+    st.caption(f"当前配置：{algorithm} · 预期异常比例 {contamination:.0%} · 窗口 {window_size} · 指标数 {len(metric_columns)}")
 
 if run_clicked:
     try:
         with st.spinner("正在进行数据预处理与异常检测……"):
-            result_df, elapsed_seconds, score_threshold = run_detection(analysis_dataframe, metric_columns, algorithm, contamination, window_size, normalization, window_step)
+            result_df, elapsed_seconds, score_threshold = run_detection(analysis_dataframe, metric_columns, algorithm, contamination, window_size)
         st.session_state["tsad_result_df"] = result_df
         st.session_state["tsad_result_key"] = current_key
         st.session_state["tsad_elapsed_seconds"] = elapsed_seconds
@@ -988,7 +1009,7 @@ if compare_clicked:
     try:
         progress = st.progress(0, text="正在运行算法对比……")
         for i, name in enumerate(CORE_ALGORITHMS):
-            one_df, one_elapsed, one_threshold = run_detection(analysis_dataframe, metric_columns, name, contamination, window_size, normalization, window_step)
+            one_df, one_elapsed, one_threshold = run_detection(analysis_dataframe, metric_columns, name, contamination, window_size)
             comparison_results[name] = one_df
             comparison_rows.append({"算法": name, "异常点数": int(one_df["is_anomaly"].sum()),
                 "异常比例": float(one_df["is_anomaly"].mean()), "检测耗时（秒）": round(one_elapsed, 4),
@@ -1012,22 +1033,6 @@ if st.session_state.get("tsad_result_key") != current_key:
 results = st.session_state["tsad_result_df"]
 elapsed_seconds = st.session_state.get("tsad_elapsed_seconds", 0.0)
 score_threshold = st.session_state.get("tsad_score_threshold", float(results["anomaly_score"].quantile(1 - contamination)))
-st.markdown("#### 统一异常分数阈值")
-score_threshold = st.slider("异常分数阈值（0–1）", min_value=0.0, max_value=1.0, value=float(np.clip(score_threshold, 0, 1)), step=0.01,
-    help="所有算法的异常分数均归一化到 [0, 1]。低于该阈值视为正常，高于或等于该阈值视为异常。", key=f"score_threshold_{current_key[:10]}")
-results["is_anomaly"] = results["anomaly_score"] >= score_threshold
-results["anomaly_label"] = np.where(results["is_anomaly"], "异常", "正常")
-results["异常类型"] = "正常"
-for metric in metric_columns:
-    series = pd.to_numeric(results[metric], errors="coerce")
-    delta = series.diff().abs()
-    delta_scale = float(delta.std()) if delta.notna().any() else 0.0
-    spike_mask = results["is_anomaly"] & (delta > max(delta_scale * 3, 1e-9))
-    results.loc[spike_mask, "异常类型"] = "Spike（尖峰突变）"
-    rolling = series.rolling(max(3, window_size), min_periods=2).mean()
-    drift_mask = results["is_anomaly"] & (results["异常类型"] == "正常") & (rolling.diff().abs() > max(float(rolling.diff().std()) * 1.5 if rolling.diff().notna().any() else 0, 1e-9))
-    results.loc[drift_mask, "异常类型"] = "Drift（缓慢漂移）"
-results.loc[results["is_anomaly"] & (results["异常类型"] == "正常"), "异常类型"] = "Contextual（上下文异常）"
 
 st.markdown('<div class="cc-section-label">04 异常分析看板</div>', unsafe_allow_html=True)
 total_count = len(results)
@@ -1039,23 +1044,7 @@ metric1.metric("检测样本数", f"{total_count:,}")
 metric2.metric("异常点数量", f"{anomaly_count:,}")
 metric3.metric("实际异常比例", f"{anomaly_rate:.2%}")
 metric4.metric("检测耗时", f"{elapsed_seconds:.3f} 秒")
-st.caption(f"算法：{algorithm} · 窗口大小：{window_size} · 归一化：{normalization} · 设定异常比例：{contamination:.0%} · 统一分数阈值：{score_threshold:.2f}")
-if label_column:
-    truth_raw = results[label_column].astype(str).str.strip().str.lower()
-    positive_values = {"1", "true", "yes", "异常", "anomaly", "outlier", "abnormal"}
-    negative_values = {"0", "false", "no", "正常", "normal", "inlier"}
-    truth = truth_raw.map(lambda x: True if x in positive_values else (False if x in negative_values else np.nan))
-    valid = truth.notna()
-    if valid.sum() > 0 and truth[valid].nunique() == 2:
-        from sklearn.metrics import precision_score, recall_score, f1_score
-        y_true = truth[valid].astype(bool).to_numpy()
-        y_pred = results.loc[valid, "is_anomaly"].astype(bool).to_numpy()
-        ev1, ev2, ev3 = st.columns(3)
-        ev1.metric("Precision", f"{precision_score(y_true, y_pred, zero_division=0):.3f}")
-        ev2.metric("Recall", f"{recall_score(y_true, y_pred, zero_division=0):.3f}")
-        ev3.metric("F1", f"{f1_score(y_true, y_pred, zero_division=0):.3f}")
-    else:
-        st.info("已选择标签列，但未识别到同时包含正常与异常的有效 0/1 或文本标签，暂不计算评估指标。")
+st.caption(f"算法：{algorithm} · 窗口大小：{window_size} · 设定异常比例：{contamination:.0%} · 检测阈值：{score_threshold:.5g}")
 
 intervals = anomaly_intervals(results, time_column)
 if not intervals.empty:
@@ -1064,55 +1053,52 @@ if not intervals.empty:
 else:
     st.info("当前配置下未检测到异常区间。")
 
-st.markdown('<div class="cc-section-label">05 时序曲线与异常可视化</div>', unsafe_allow_html=True)
-chart_mode = st.radio("时序展示模式", ["分指标子图（推荐）", "合并曲线"], horizontal=True)
-chart_mode_internal = "分指标子图" if chart_mode.startswith("分指标") else "合并曲线"
+st.markdown('<div id="interactive-visualization" class="cc-section-label">05 时序曲线与异常可视化</div>', unsafe_allow_html=True)
+chart_metric = st.selectbox("选择要查看的时序指标", options=metric_columns, index=0, key="tsad_chart_metric")
 chart_left, chart_right = st.columns(2, gap="large")
 with chart_left:
-    st.plotly_chart(build_multi_metric_chart(results, time_column, metric_columns, chart_mode_internal), use_container_width=True, config={"displaylogo": False, "scrollZoom": True})
+    st.plotly_chart(build_time_series_chart(results, time_column, chart_metric), use_container_width=True, config={"displaylogo": False})
 with chart_right:
-    st.plotly_chart(build_score_chart(results, time_column, score_threshold), use_container_width=True, config={"displaylogo": False, "scrollZoom": True})
+    st.plotly_chart(build_score_chart(results, time_column, score_threshold), use_container_width=True, config={"displaylogo": False})
 st.plotly_chart(build_metric_distribution(results, metric_columns), use_container_width=True, config={"displaylogo": False})
 
 if st.session_state.get("tsad_comparison_key") == current_key and "tsad_comparison_df" in st.session_state:
     st.markdown("#### 三种时序检测算法对比")
-    compare_df = st.session_state["tsad_comparison_df"].copy()
-    comparison_results = st.session_state.get("tsad_comparison_results", {})
-    # Re-label all comparison outputs with the same interactive threshold for fairer comparison.
-    for name, compare_result in comparison_results.items():
-        compare_result["is_anomaly"] = compare_result["anomaly_score"] >= score_threshold
-        compare_result["anomaly_label"] = np.where(compare_result["is_anomaly"], "异常", "正常")
-        row_mask = compare_df["算法"] == name
-        compare_df.loc[row_mask, "异常点数"] = int(compare_result["is_anomaly"].sum())
-        compare_df.loc[row_mask, "异常比例"] = float(compare_result["is_anomaly"].mean())
-        compare_df.loc[row_mask, "异常评分阈值"] = score_threshold
+    compare_df = st.session_state["tsad_comparison_df"]
     st.dataframe(compare_df, use_container_width=True, hide_index=True)
-    if len(comparison_results) >= 2:
-        overlap_rows = []
-        names = list(comparison_results)
-        for i in range(len(names)):
-            for j in range(i + 1, len(names)):
-                a = comparison_results[names[i]]["is_anomaly"].to_numpy(dtype=bool)
-                b = comparison_results[names[j]]["is_anomaly"].to_numpy(dtype=bool)
-                union = int(np.logical_or(a, b).sum())
-                intersection = int(np.logical_and(a, b).sum())
-                overlap_rows.append({"算法 A": names[i], "算法 B": names[j], "共同异常点": intersection, "异常重合度（Jaccard）": intersection / union if union else 1.0})
-        st.markdown("##### 算法异常重合度")
-        st.dataframe(pd.DataFrame(overlap_rows), use_container_width=True, hide_index=True)
+    compare_plot_df = compare_df.sort_values("异常点数", ascending=True).reset_index(drop=True)
+    # Keep equal values in the same color; highlight every algorithm tied for the maximum.
+    algo_labels = [f"{i + 1}.  {name}" for i, name in enumerate(compare_plot_df["算法"].tolist())]
+    max_algo_count = compare_plot_df["异常点数"].max() if not compare_plot_df.empty else 0
+    algo_colors = ["#3977DB" if count == max_algo_count else "#8AADE5" for count in compare_plot_df["异常点数"]]
     compare_fig = go.Figure()
-    compare_fig.add_trace(go.Bar(x=compare_df["算法"], y=compare_df["异常点数"], name="异常点数", marker_color="#2563eb"))
-    compare_fig.update_layout(template="plotly_white", title="不同算法检出的异常点数量", yaxis_title="异常点数", margin=dict(l=18, r=18, t=55, b=18))
+    compare_fig.add_trace(go.Bar(
+        x=compare_plot_df["异常点数"], y=algo_labels, orientation="h",
+        name="异常点数", marker=dict(color=algo_colors, cornerradius="50%"), text=compare_plot_df["异常点数"],
+        textposition="outside", cliponaxis=False, marker_line_width=0, width=0.30,
+        hovertemplate="%{y}<br>检出异常点数量：%{x:,}<extra></extra>",
+    ))
+    compare_fig.update_layout(
+        template="plotly_white", paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
+        title="不同算法检出的异常点数量", xaxis_title="检出异常点数量", yaxis_title="",
+        bargap=0.52, height=250, margin=dict(l=18, r=48, t=55, b=24),
+        font=dict(family="Segoe UI, Microsoft YaHei, sans-serif", color="#374151", size=12),
+        showlegend=False,
+    )
+    max_algo_count = max(compare_plot_df["异常点数"].max(), 1)
+    compare_fig.update_xaxes(showgrid=True, gridcolor="#f1f5f9", linecolor="#e5e7eb", range=[-max_algo_count * 0.08, max_algo_count * 1.18], zeroline=False)
+    compare_fig.update_yaxes(showgrid=False, linecolor="#ffffff", automargin=True, ticksuffix="  ")
     st.plotly_chart(compare_fig, use_container_width=True, config={"displaylogo": False})
     st.download_button("下载算法对比 CSV", data=compare_df.to_csv(index=False).encode("utf-8-sig"), file_name="tsad_algorithm_comparison.csv", mime="text/csv")
 
-st.markdown('<div class="cc-section-label">06 异常记录与结果导出</div>', unsafe_allow_html=True)
+st.markdown('<div id="result-export" class="cc-section-label">06 异常记录与结果导出</div>', unsafe_allow_html=True)
 table_controls_col, table_info_col = st.columns([1, 3], gap="medium")
 with table_controls_col:
     only_anomalies = st.checkbox("仅显示异常记录", value=True)
 with table_info_col:
     st.caption(f"共 {anomaly_count:,} 条异常、{normal_count:,} 条正常。缺失值仅在模型输入阶段填补；原始指标列保留预处理后的原始值。")
 displayed = results[results["is_anomaly"]] if only_anomalies else results
-display_columns = ([time_column] if time_column and time_column in displayed.columns else []) + metric_columns + ["anomaly_score", "anomaly_label", "异常类型"]
+display_columns = ([time_column] if time_column and time_column in displayed.columns else []) + metric_columns + ["anomaly_score", "anomaly_label"]
 display_columns = list(dict.fromkeys(display_columns))
 if only_anomalies and not displayed.empty:
     displayed = displayed.sort_values("anomaly_score", ascending=False)
@@ -1126,15 +1112,6 @@ with download_col2:
     st.download_button("下载异常记录", data=anomaly_csv, file_name="tsad_anomaly_records.csv", mime="text/csv", use_container_width=True)
 with download_col3:
     st.caption("CSV 使用 UTF-8 BOM 编码，便于在 Excel 中查看中文字段。")
-
-parameter_snapshot = pd.DataFrame([{"算法": algorithm, "预期异常比例": contamination, "最终分数阈值": score_threshold,
-    "窗口大小": window_size, "窗口步长": window_step, "归一化": normalization, "重采样": resample_rule, "负值过滤": remove_negative,
-    "时间列": time_column or "样本序号", "检测指标": ", ".join(metric_columns), "检测时间": pd.Timestamp.now().isoformat(timespec="seconds")}])
-st.download_button("下载本次参数快照 CSV", data=parameter_snapshot.to_csv(index=False).encode("utf-8-sig"), file_name="tsad_parameter_snapshot.csv", mime="text/csv")
-html_chart = build_multi_metric_chart(results, time_column, metric_columns, "分指标子图").to_html(full_html=False, include_plotlyjs="cdn")
-html_score = build_score_chart(results, time_column, score_threshold).to_html(full_html=False, include_plotlyjs=False)
-html_report = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TSAD 异常检测报告</title><style>body{{font-family:Segoe UI,Microsoft YaHei,sans-serif;background:#f8fafc;color:#111827;max-width:1200px;margin:32px auto;padding:0 20px}}section{{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;margin:18px 0}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #e5e7eb;padding:8px;text-align:left}}</style></head><body><h1>TSAD 时间序列异常检测报告</h1><section><h2>检测摘要</h2>{parameter_snapshot.to_html(index=False)}<p>样本数：{total_count}；异常点：{anomaly_count}；异常比例：{anomaly_rate:.2%}；耗时：{elapsed_seconds:.3f} 秒</p></section><section><h2>时序图</h2>{html_chart}</section><section><h2>异常分数</h2>{html_score}</section><section><h2>异常时间区间</h2>{intervals.to_html(index=False)}</section><section><h2>异常记录</h2>{results.loc[results['is_anomaly'], display_columns].to_html(index=False)}</section></body></html>"""
-st.download_button("下载交互式 HTML 看板报告", data=html_report.encode("utf-8"), file_name="tsad_anomaly_report.html", mime="text/html")
 
 st.markdown("---")
 st.caption("TSAD Dashboard · 面向多变量监控数据的异常分析演示平台。Isolation Forest、LOF、KNN 属于通用异常检测器；Spectral Residual 与 Matrix Profile 在本项目中以可复现的基础实现提供，结果需结合业务场景验证。")

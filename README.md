@@ -2,6 +2,9 @@
 
 基于 PyOD、Streamlit、Pandas 与 Plotly 的多变量监控指标异常分析演示平台。面向 CPU 使用率、内存占用、磁盘 I/O、请求量等时序数据，提供数据质量检查、异常检测、交互式可视化、算法对比和 CSV 导出。
 
+Python **异常检测（离群点检测）工具箱**，做时序异常检测的核心算法库
+
+Streamlit **快速 Web 数据应用框架，不用写 HTML/JS**
 > **研究范围说明：** Isolation Forest、LOF 和 KNN 是通用异常检测器，本项目将其应用于滑动窗口特征；Spectral Residual 与 Matrix Profile 是本项目提供的基础实现。它们不应被描述为经过充分验证的生产级专用 TSAD 模型。用于实际运维前，需要结合业务标签、基线和误报成本进行评估。
 
 ## 功能模块
